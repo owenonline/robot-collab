@@ -460,8 +460,8 @@ class MujocoSimEnv:
                     )
 
                     # this code I used to help track down the image segmentation
-                    # rgb_image = Image.fromarray(rgb.astype('uint8'), 'RGB')
-                    # rgb_image.save(f'rgb_image_{cam_name}.png')
+                    rgb_image = Image.fromarray(rgb.astype('uint8'), 'RGB')
+                    rgb_image.save(f'rgb_image_{cam_name}.png')
 
                     # # Process and save the Segmentation image
                     # # Extracting the mjModel ID from the segmentation tuple (assuming it's the first element of the tuple)

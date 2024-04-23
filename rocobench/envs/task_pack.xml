@@ -32,10 +32,12 @@
       
     </body> 
 
+    <!-- <geom name="ur5e_robotiqbox" pos="-0.2 -0.07 0.15" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name="ur5e_robotiq" pos="-0.2 -0.07 0.15" > 
       <include file="assets/ur5e/ur5e_robotiq.xml" />
     </body>
 
+    <!-- <geom name="pandabox" pos="-0.2 1.05 0.1" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name="panda" pos="-0.2 1.05 0.1" >
       <include file="assets/panda/panda_include.xml" />
     </body> 
@@ -71,8 +73,10 @@
       <site name="bin_back_right" pos="0.2 0.085 0.2"  type="cylinder" group="3" rgba='1 1 0 1' size="0.01 0.005" quat="1 0 0 0" />  
    </body>
   
+    
     <body name="apple" pos="-0.5 0.5 0.2">
       <freejoint name="apple_joint" />
+      <camera mode="trackcom" name='object_apple' pos="0.000 0.200 0.100" xyaxes="-0.000 0.447 -0.894 -1.000 -0.000 0.000"/>
       <geom type="mesh" name="apple_visual" mesh="apple" rgba="0.78 0.215 0.184 1" />
       <!-- <geom name="apple_contact" type="box" pos="0 0 -0.01" rgba="0.1 0.1 0.2 0"  size="0.04 0.04 0.04" friction="0.95 0.6 0.1" density="1000"/> -->
       <geom name="apple_contact" type="mesh" class="object_collision" mesh="apple_contact1" />
@@ -83,8 +87,10 @@
       <site name="apple_right" pos="0.06 0 0" class="site_right"/>
     </body>
 
+    <!-- <geom name="bananabox" pos="0.2 0.7 0.2" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name="banana" pos="-0.2 0.7 0.2" > 
       <freejoint name="banana_joint"/>
+      <camera mode="trackcom" name='object_banana' pos="-0.020 -0.200 0.200" xyaxes="0.000 -0.707 -0.707 1.000 -0.000 0.000"/>
       <geom type="mesh" mesh="banana" class="object_visual" rgba="0.8 0.7 0 1" />
       <!-- <geom type="box" pos="0 0 0" rgba="0.1 0.1 0.2 1"  size="0.125 0.02 0.04" friction="0.95 0.6 0.1" density="1000" /> -->
       <site name="banana_top" pos="0 0.03 0.05" class="site_top" />
@@ -97,20 +103,24 @@
       <geom name="banana_contact4" type="mesh" class="object_collision" mesh="banana_contact4" />
     </body>
 
+    <!-- <geom name="milkbox" pos="-0.6 0.4 0.3" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name="milk" pos="-0.6 0.4 0.3">
-        <freejoint name="milk_joint"/>
-        <geom mesh="milk_mesh" type="mesh" material="ceramic" class="object_visual"/> 
-        <geom name="milk_contact0" type="mesh" material="ceramic" mesh="milk_contact0" class='object_collision'/>
-        <geom name="milk_contact" type="box" pos="0 0 -0.01" size="0.035 0.035 0.09" class='object_collision'/>
-        <body name="milk_top" pos="0 0 0.15" />
-        <site name="milk_top" pos="0 0 0.17" class="site_top"/>
-        <site name="milk_left" pos="-0.06 0 0.06" class="site_left"/> 
-        <site name="milk_right" pos="0.06 0 0.06" class="site_right"/>
-        <site name="milk_bottom" pos="0 0 -0.12" class="site_bottom"/> 
-      </body>
+      <freejoint name="milk_joint"/>
+      <camera mode="trackcom" name='object_milk' pos="0.000 0.230 0.240" xyaxes="-0.000 0.656 -0.755 -1.000 -0.000 0.000"/>
+      <geom mesh="milk_mesh" type="mesh" material="ceramic" class="object_visual"/> 
+      <geom name="milk_contact0" type="mesh" material="ceramic" mesh="milk_contact0" class='object_collision'/>
+      <geom name="milk_contact" type="box" pos="0 0 -0.01" size="0.035 0.035 0.09" class='object_collision'/>
+      <body name="milk_top" pos="0 0 0.15" />
+      <site name="milk_top" pos="0 0 0.17" class="site_top"/>
+      <site name="milk_left" pos="-0.06 0 0.06" class="site_left"/> 
+      <site name="milk_right" pos="0.06 0 0.06" class="site_right"/>
+      <site name="milk_bottom" pos="0 0 -0.12" class="site_bottom"/> 
+    </body>
 
+    <!-- <geom name="breadbox" pos="-0.7 0.6 0.2" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name="bread" pos="-0.7 0.6 0.2">
       <freejoint name="bread_joint"/>
+      <camera mode="trackcom" name='object_bread' pos="0.000 -0.200 0.100" xyaxes="0.000 -0.447 -0.894 1.000 -0.000 0.000"/>
       <geom mesh="bread_mesh" type="mesh" material="bread"  class="object_visual"/> 
       <geom name="bread_contact" type="box" group="3" rgba="1 0 0 0" size="0.044 0.058 0.042" density="1000"/> 
       
@@ -124,8 +134,10 @@
       <site name="bread_right" pos="0.06 0 -0.01" class="site_right"/>
     </body> 
 
+    <!-- <geom name="cerealbox" pos="-0.8 0.45 0.4" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" /> -->
     <body name='cereal' pos="-0.8 0.45 0.4" >
       <freejoint name="cereal_joint"/>
+      <camera mode="trackcom" name='object_cereal' pos="0.000 0.200 0.170" xyaxes="-0.000 0.600 -0.800 -1.000 -0.000 0.000"/>
       <geom type="mesh" mesh="cereal" class="object_visual" material="cereal"/>
       <geom name="cereal_contact" type="box" size="0.06 0.022 0.09"  rgba="0 1 0 0" friction="1 1 1"  density="5000"/>
       <site name="cereal_top"      pos="0 0 0.15" class="site_top"/> 
@@ -144,6 +156,10 @@
       <body name="soda_can_top" pos="0 0 0.06"/>
     </body>
 
+    <body name="origin" pos="0 0 0">
+      <geom name="originbox" pos="0 0 0" size="0.05 0.05 0.05" type="box" conaffinity="0" contype="0"  group="1" mass="0" rgba="0 255 0 1" />
+    </body>
+
     <camera mode="fixed" name="face_panda" pos="0.223 -1.064 0.758" xyaxes="1.000 0.003 0.000 -0.000 0.143 0.990"/>
     <camera mode="fixed" name="face_ur5e" pos="-0.207 2.256 1.027" xyaxes="-1.000 0.005 0.000 -0.001 -0.296 0.955"/>
     <camera mode="fixed" name="top_cam" pos="-0.001 0.652 2.057" xyaxes="-1.000 -0.000 -0.000 0.000 -1.000 0.019"/>
@@ -151,6 +167,8 @@
     <camera mode="fixed" name="left_cam" pos="-1.873 0.605 0.926" xyaxes="-0.000 -1.000 0.000 0.177 -0.000 0.984"/>
     <camera name="teaser" pos="2.675 -0.747 1.997" xyaxes="0.496 0.869 -0.000 -0.429 0.245 0.869"/>
     <camera name='video' pos="1.957 -0.281 1.731" xyaxes="0.487 0.874 0.000 -0.500 0.278 0.820"/>
+
+    <camera mode="fixed" name='sceneshot' pos="-1.200 0.500 0.500" xyaxes="-0.280 -0.000 -0.960 0.000 -1.000 0.000"/>
 
   </worldbody> 
 
