@@ -168,7 +168,7 @@
     <camera name="teaser" pos="2.675 -0.747 1.997" xyaxes="0.496 0.869 -0.000 -0.429 0.245 0.869"/>
     <camera name='video' pos="1.957 -0.281 1.731" xyaxes="0.487 0.874 0.000 -0.500 0.278 0.820"/>
 
-    <camera mode="fixed" name='sceneshot' pos="-1.200 0.500 0.500" xyaxes="-0.280 -0.000 -0.960 0.000 -1.000 0.000"/>
+    <camera mode="fixed" name='sceneshot' pos="-1.000 0.500 0.700" xyaxes="-0.482 -0.000 -0.876 0.000 -1.000 0.000" fovy="90"/>
 
   </worldbody> 
 
