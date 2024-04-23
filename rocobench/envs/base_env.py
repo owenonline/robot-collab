@@ -1,6 +1,8 @@
 import os
 import copy
 import time
+import torch
+from lavis.models.eva_vit import create_eva_vit_g
 import cv2 
 import numpy as np 
 import random
@@ -198,6 +200,7 @@ class MujocoSimEnv:
         task_objects: List[str], # key objects for each task
         agent_configs: Dict = dict(ur5e_suction=UR5E_ROBOTIQ_CONSTANTS, panda=PANDA_CONSTANTS), 
         render_cameras: List[str] = ["face_panda", "face_ur5e", "top_cam", "right_cam", "left_cam", "teaser"],
+        point_feature_cameras: List[str] = [],
         image_hw: Tuple = (480,480),
         render_freq: int = 20,
         home_qpos: Union[NDArray, None] = None, 
@@ -211,6 +214,12 @@ class MujocoSimEnv:
         render_point_cloud=True, 
         skip_reset=False,
         ):
+        # # prepare the image embedding model
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.visual_encoder = create_eva_vit_g(512, precision='fp32').to(self.device)
+
+        self.tracked = tracked
+
         # load the task scene xml path
         self.xml_file_path = filepath
         self.physics = dm_mujoco.Physics.from_xml_path(filepath)
@@ -243,6 +252,7 @@ class MujocoSimEnv:
         # check rendering options
         self.render_point_cloud = render_point_cloud
         self.render_buffers = dict()
+        self.feature_render_buffers = dict()
         for cam in render_cameras:
             try:
                 self.physics.render(camera_id=cam, height=image_hw[0], width=image_hw[1])
@@ -250,7 +260,15 @@ class MujocoSimEnv:
                 print("Got Error: ", e)
                 print("Camera {} does not exist in the xml file".format(cam))
             self.render_buffers[cam] = deque(maxlen=3000)
+        for cam in point_feature_cameras:
+            try:
+                self.physics.render(camera_id=cam, height=image_hw[0], width=image_hw[1])
+            except Exception as e:
+                print("Got Error: ", e)
+                print("Camera {} does not exist in the xml file".format(cam))
+            self.feature_render_buffers[cam] = deque(maxlen=3000)
         self.render_cameras = render_cameras
+        self.point_feature_cameras = point_feature_cameras
         self.render_freq = render_freq
         self.image_hw = image_hw
 
@@ -451,76 +469,20 @@ class MujocoSimEnv:
                         depth=True,
                         camera_id=cam.id,
                     )
-                    segmentation = self.physics.render(
-                        height=self.image_hw[0],
-                        width=self.image_hw[1],
-                        depth=False,
-                        segmentation=True,
-                        camera_id=cam_name,
-                    )
-
-                    # this code I used to help track down the image segmentation
-                    rgb_image = Image.fromarray(rgb.astype('uint8'), 'RGB')
-                    rgb_image.save(f'rgb_image_{cam_name}.png')
-
-                    # # Process and save the Segmentation image
-                    # # Extracting the mjModel ID from the segmentation tuple (assuming it's the first element of the tuple)
-                    # mjmodel_ids = segmentation[:,:,0]
-
-                    # # To give each unique ID a unique color, map each unique ID to a color
-                    # unique_ids = np.unique(mjmodel_ids)
-                    # # Shuffle the unique IDs
-                    # random.shuffle(unique_ids)
-
-                    # # Assign random colors to each unique ID
-                    # colors = [tuple(random.randint(0, 255) for _ in range(3)) for _ in range(len(unique_ids))]
-                    # id_to_color = {id_: colors[i] for i, id_ in enumerate(unique_ids)}
-                    # with open(f'segmentation_colors_{cam_name}.txt', 'w') as f:
-                    #     for id, color in id_to_color.items():
-                    #         try:
-                    #             name = self.physics.model.body(id).name
-                    #             f.write(f'{name}: {color}\n')
-                    #         except:
-                    #             f.write(f'NONAME {id}: {color}\n')
-
-                    # # Create an image array
-                    # segmentation_colored = np.zeros((*mjmodel_ids.shape, 3), dtype=np.uint8)
-                    # for id_, color in id_to_color.items():
-                    #     segmentation_colored[mjmodel_ids == id_] = color
-
-                    # # Convert to an image and save
-                    # segmentation_image = Image.fromarray(segmentation_colored, 'RGB')
-                    # segmentation_image.save(f'segmentation_image_{cam_name}.png')
-
-                    segmentation_points = defaultdict(lambda: np.zeros(self.image_hw, dtype=bool))
-                    # {obj: np.zeros(self.image_hw, dtype=bool) for obj in self.task_objects}
-                    for i in range(segmentation.shape[0]):
-                        for j in range(segmentation.shape[1]):
-                            model_id = segmentation[i,j][0] # this is the id and type number
-                            # types can be found at https://mujoco.readthedocs.io/en/stable/APIreference/APItypes.html at mjtObj
-                            # then you can do env.model.[function corresponding to type](id) and get all the info, including the body id which is what we want
-                            try:
-                                geom_body_assc = self.physics.model.geom(model_id).bodyid
-                                if geom_body_assc == []:
-                                    continue
-                                model_name_candidates = [self.physics.model.body(asscid).name for asscid in geom_body_assc]
-                                model_name = [obj for obj in model_name_candidates if obj in self.task_objects][0]
-                                segmentation_points[model_name][i,j] = True
-                            except:
-                                continue
-                            # if model_name in self.task_objects:
-                            
-                    # print(f"object states: {self.get_object_states(self.get_contact())}")
-                    # print(f"segmentation: {segmentation.shape}")
-                    # print(segmentation)
+                    # segmentation = self.physics.render(
+                    #     height=self.image_hw[0],
+                    #     width=self.image_hw[1],
+                    #     depth=False,
+                    #     segmentation=True,
+                    #     camera_id=cam_name,
+                    # )
                     
                     outputs[cam_name] = VisionSensorOutput(
                         rgb=rgb,
                         depth=depth,                     
                         pos=(cam_pos[0], cam_pos[1], cam_pos[2]),
                         rot_mat=cam_rotmat,
-                        fov=float(cam.fovy[0]),
-                        segmentation=segmentation_points
+                        fov=float(cam.fovy[0])
                     )
                     break   
 
@@ -538,6 +500,164 @@ class MujocoSimEnv:
         ]
         point_cloud = sum(point_clouds[1:], start=point_clouds[0]) 
         return point_cloud
+
+    def render_feature_cameras(self, max_retries: int = 100):
+        outputs = {}
+        for cam_name in self.point_feature_cameras:
+            cam = self.physics.model.camera(cam_name)
+            cam_data = self.physics.data.camera(cam_name)
+            cam_pos = cam_data.xpos.reshape(3)
+            cam_rotmat = cam_data.xmat.reshape(3, 3)
+            for i in range(max_retries): 
+                try:
+                    rgb = self.physics.render(
+                        height=self.image_hw[0],
+                        width=self.image_hw[1],
+                        depth=False,
+                        camera_id=cam.id,
+                    ) 
+                    depth = self.physics.render(
+                        height=self.image_hw[0],
+                        width=self.image_hw[1],
+                        depth=True,
+                        camera_id=cam.id,
+                    )
+                    segmentation = self.physics.render(
+                        height=self.image_hw[0],
+                        width=self.image_hw[1],
+                        depth=False,
+                        segmentation=True,
+                        camera_id=cam_name,
+                    )
+
+                    # get the image from the camera
+                    rgb_image = Image.fromarray(rgb.astype('uint8'), "RGB")
+                    rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_90_CLOCKWISE)
+
+                    # undistort the image, since the scene camera uses an extra wide field of view to capture everything in the scene
+                    if cam_name == "sceneshot":
+                        h, w = rgb_image.shape[:2]
+                        focal_length = w / (2 * np.tan(45 * np.pi / 180))
+                        K = np.array([[focal_length, 0, w / 2],
+                                        [0, focal_length, h / 2],
+                                        [0, 0, 1]])
+                        dist_coeffs = np.zeros(4)
+                        new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(K, dist_coeffs, (w, h), 1, (w, h))
+                        rgb_image = cv2.undistort(rgb_image, K, dist_coeffs, None, new_camera_matrix)
+                        x, y, w, h = roi
+                        rgb_image = rgb_image[y:y+h, x:x+w]
+
+                    # get the points in the image belonging to the different task objects we care about
+                    segmentation_points = defaultdict(lambda: np.zeros(self.image_hw, dtype=bool))
+                    for i in range(segmentation.shape[0]):
+                        for j in range(segmentation.shape[1]):
+                            model_id = segmentation[i,j][0] # this is the id and type number
+                            # types can be found at https://mujoco.readthedocs.io/en/stable/APIreference/APItypes.html at mjtObj
+                            # then you can do env.model.[function corresponding to type](id) and get all the info, including the body id which is what we want
+                            try:
+                                geom_body_assc = self.physics.model.geom(model_id).bodyid
+                                if geom_body_assc == []:
+                                    continue
+                                model_name_candidate = [self.physics.model.body(asscid).name for asscid in geom_body_assc][0]
+                                model_name = [obj for obj in self.point_feature_cameras if obj in model_name_candidate][0]
+                                segmentation_points[model_name][i,j] = True
+                            except:
+                                continue
+                    
+                    outputs[cam_name] = (VisionSensorOutput(
+                        rgb=rgb,
+                        depth=depth,                     
+                        pos=(cam_pos[0], cam_pos[1], cam_pos[2]),
+                        rot_mat=cam_rotmat,
+                        fov=float(cam.fovy[0]),
+                        segmentation=segmentation_points
+                    ), rgb_image)
+                    break   
+
+                except mujocoFatalError as e:
+                    if i == max_retries - 1:
+                        raise e
+                    time.sleep(5)
+        return outputs
+
+    def get_point_aligned_features(self):
+        object_sensor_outputs = self.render_feature_cameras()
+
+        # combine object level point clouds into global scene point cloud
+        point_clouds = [
+            sensor_output[0].point_cloud.filter_bounds(bounds=SCENE_BOUNDS) 
+                for sensor_output in object_sensor_outputs.values()
+        ]
+        global_point_cloud = sum(point_clouds[1:], start=point_clouds[0])
+
+        cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
+
+        # calculate the global feature vector
+        _, scene_img = object_sensor_outputs["sceneshotcam"]
+        scene_img = cv2.resize(scene_img, (512, 512))
+        scene_tensor = torch.tensor(scene_img[:512,:512]).permute(2, 0, 1)
+        scene_tensor = scene_tensor.unsqueeze(0).float().to(self.device)
+        output = self.visual_encoder(scene_tensor)
+        global_feat = torch.tensor(output)
+        global_feat = global_feat.half().to(self.device)
+        global_feat = global_feat.mean(1)
+        global_feat = torch.nn.functional.normalize(global_feat, dim=-1)
+        FEAT_DIM = global_feat.shape[-1]
+
+        pixelwise_features = torch.zeros(global_point_cloud.xyz_pts.shape[0], FEAT_DIM, dtype=torch.half)
+
+        specific_views = list(set(self.point_feature_cameras) - {"sceneshotcam"})
+
+        feat_per_obj = []
+        obj_sim_per_unit_area = []
+        for view in specific_views:
+            # crop the image to the bounding box and run it through the visual encoder to get the feature vector for the object
+            _, obj_img = object_sensor_outputs[view]
+            roi = torch.ones((512, 512, 3))
+            img_roi = torch.tensor(obj_img[:512,:512])
+            roi[:img_roi.shape[0], :img_roi.shape[1]] = img_roi
+            img_roi = roi.permute(2, 0, 1).unsqueeze(0).to(self.device)
+            roifeat = self.visual_encoder(img_roi)
+            roifeat = torch.tensor(roifeat)
+            roifeat = roifeat.half().cuda()
+            roifeat = roifeat.mean(1)
+            roifeat = torch.nn.functional.normalize(roifeat, dim=-1)
+            feat_per_obj.append(roifeat)
+
+            # calculate the cosine similarity between the global feature vector and the feature vector for the object and save that as well
+            _sim = cosine_similarity(global_feat, roifeat)
+            obj_sim_per_unit_area.append(_sim)
+
+        scores = torch.cat(obj_sim_per_unit_area).to(self.device)
+        feat_per_obj = torch.cat(feat_per_obj, dim=0).to(self.device)
+
+        # get the cosine simixlarity between the features of each object. This will be a square matrix where the (i, j)th entry is the cosine similarity between the ith and jth objects
+        mask_sim_mat = torch.nn.functional.cosine_similarity(
+            feat_per_obj[:, :, None], feat_per_obj.t()[None, :, :]
+        )
+        mask_sim_mat.fill_diagonal_(0.0) # set the diagonal to 0 because we don't want to consider the similarity between the same object
+        mask_sim_mat = mask_sim_mat.mean(1)  # avg sim of each mask with each other mask
+        softmax_scores = scores.cuda() - mask_sim_mat # subtracting the object-object relevance (which can be thought of as the relevance of the object in context of the other objects) object-scene similarity (which is kind of like global relevance) gives how much more or less important that object is than all the other objects
+        softmax_scores = torch.nn.functional.softmax(softmax_scores, dim=0) # apply softmax to get the final scores
+        for objidx in range(len(specific_views)):
+            _weighted_feat = (
+                softmax_scores[objidx] * global_feat + (1 - softmax_scores[objidx]) * feat_per_obj[objidx]
+            )
+            _weighted_feat = torch.nn.functional.normalize(_weighted_feat, dim=-1)
+            pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] += _weighted_feat
+            pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] = torch.nn.functional.normalize(
+                pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :],
+                dim=-1,
+            ).half()
+
+        outfeat = pixelwise_features.unsqueeze(0).float()  # interpolate is not implemented for float yet in pytorch
+        outfeat = outfeat.permute(0, 3, 1, 2)  # 1, H, W, feat_dim -> 1, feat_dim, H, W
+        outfeat = torch.nn.functional.interpolate(outfeat, [512, 512], mode="nearest")
+        outfeat = outfeat.permute(0, 2, 3, 1)  # 1, feat_dim, H, W --> 1, H, W, feat_dim
+        outfeat = torch.nn.functional.normalize(outfeat, dim=-1)
+        outfeat = outfeat[0].half()
+
+        return global_point_cloud.xyz_pts, outfeat
 
     def get_contact(self) -> Dict:
         """ iterates through all contacts and return dict(each_root_body: set(other_body_names))""" 

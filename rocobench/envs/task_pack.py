@@ -15,6 +15,7 @@ from rocobench.envs.constants import UR5E_ROBOTIQ_CONSTANTS, PANDA_CONSTANTS
 
 PACK_TASK_OBJECTS=[
     "bin",
+    "bin_inside",
     "table_top",
     "apple",
     "banana",
@@ -68,7 +69,7 @@ Their discussion and the final plan: """
 class PackGroceryTask(MujocoSimEnv):
     def __init__( 
         self,
-        filepath: str = "rocobench/envs/task_pack.xml",
+        filepath: str = "/home/owenburns88/robot-collab/rocobench/envs/task_pack.xml",#"rocobench/envs/task_pack.xml",
         one_obj_each: bool = False,
         **kwargs,
     ):    
