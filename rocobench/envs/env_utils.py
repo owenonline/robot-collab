@@ -256,9 +256,13 @@ class PointCloud:
             rgb_pts=np.concatenate((self.rgb_pts, other.rgb_pts), axis=0),
             segmentation_pts={
                 k: np.concatenate(
-                    (self.segmentation_pts[k], other.segmentation_pts[k]), axis=0
+                    (
+                        self.segmentation_pts.get(k, np.zeros((len(self.xyz_pts),), dtype=bool)),
+                        other.segmentation_pts.get(k, np.zeros((len(other.xyz_pts),), dtype=bool))
+                    ),
+                    axis=0
                 )
-                for k in self.segmentation_pts.keys()
+                for k in set(self.segmentation_pts.keys()).union(other.segmentation_pts.keys())
             },
         )
 
@@ -333,18 +337,25 @@ class PointCloud:
         bounds: Optional[Tuple[Point3D, Point3D]] = ((-1.0, -0.7, 0.12), (1.0, 2.5, 1.5)),
         show: bool = True,
         img_output_name: Optional[str] = "point_cloud.png",
+        excluding: Optional[List[str]] = None,
     ):
         if views is None:
             views = [(45, 135)]
         fig = plt.figure(figsize=(6, 6), dpi=160)
         ax = fig.add_subplot(111, projection="3d")
         point_cloud = self
+
         if bounds is not None:
             point_cloud = point_cloud.filter_bounds(bounds=bounds)
+        excluding_keys = excluding or []
+        mask = np.ones(len(point_cloud), dtype=bool)
+        for key, value in point_cloud.segmentation_pts.items():
+            if key in excluding_keys and np.any(value):
+                mask &= ~value
         x, y, z = (
-            point_cloud.xyz_pts[:, 0],
-            point_cloud.xyz_pts[:, 1],
-            point_cloud.xyz_pts[:, 2],
+            point_cloud.xyz_pts[mask, 0],
+            point_cloud.xyz_pts[mask, 1],
+            point_cloud.xyz_pts[mask, 2],
         )
         ax.set_facecolor(background_color)
         ax.w_xaxis.set_pane_color(background_color)  # type: ignore
@@ -355,7 +366,7 @@ class PointCloud:
             x,
             y,
             z,
-            c=point_cloud.rgb_pts.astype(float)/255.0,
+            c=point_cloud.rgb_pts[mask,:].astype(float)/255.0,
             s=pts_size,  # type: ignore
         )
 
@@ -448,7 +459,8 @@ class VisionSensorOutput:
             np.concatenate((cam_pts, np.ones_like(cam_pts[:, [0]])), axis=1).T,
         ).T[:, :3]
         if self.segmentation is not None:
-            seg_pts = {k: v.reshape(-1) for k, v in self.segmentation.items()}
+            # seg_pts = {k: v.reshape(-1) for k, v in self.segmentation.items()}
+            seg_pts = {k: v.flatten() for k, v in self.segmentation.items()}
         else:
             seg_pts = {}
         cloud = PointCloud(

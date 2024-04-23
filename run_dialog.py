@@ -411,14 +411,14 @@ def main(args):
         render_freq = 3000
     env = env_cl(
         render_freq=render_freq,
-        image_hw=(400,400),
-        sim_forward_steps=300,
+        image_hw=(400,400), # Potentially important for getting RGBD images later on
+        sim_forward_steps=300, # number of time steps forward that mujoco simulates before deciding that the llms need to pick an easier to optimize plan
         error_freq=30,
         error_threshold=1e-5,
         randomize_init=True,
-        render_point_cloud=0,
-        render_cameras=["face_panda","face_ur5e","teaser",],
-        one_obj_each=True,
+        render_point_cloud=0, # Potentially useful for speeding up point fusion
+        render_cameras=["face_panda","face_ur5e","teaser",], # potentially useful for getting rgbd images
+        one_obj_each=True, # TODO: Understand this
     )
     robots = env.get_sim_robots()
     if args.no_feedback:

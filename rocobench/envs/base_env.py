@@ -11,7 +11,7 @@ from collections import deque, defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from numpy.typing import ArrayLike, NDArray
 from pydantic import dataclasses, validator
-
+from collections import defaultdict
 import mujoco
 from mujoco import FatalError as mujocoFatalError
 import dm_control 
@@ -208,10 +208,10 @@ class MujocoSimEnv:
         error_freq=3,
         randomize_init=True,
         np_seed=0,
-        render_point_cloud=False, 
+        render_point_cloud=True, 
         skip_reset=False,
         ):
-        # print(filepath)
+        # load the task scene xml path
         self.xml_file_path = filepath
         self.physics = dm_mujoco.Physics.from_xml_path(filepath)
         self.home_qpos = home_qpos 
@@ -227,6 +227,7 @@ class MujocoSimEnv:
             print("Home qpos is not loaded to the xml file")
         del copy_physics
 
+        # make sure that the agents selected are supported
         self.agent_configs = agent_configs 
         for k, v in self.agent_configs.items():
             assert k in ["ur5e_suction", "panda", "ur5e_robotiq", "humanoid"], f"agent name {k} not supported" 
@@ -422,6 +423,9 @@ class MujocoSimEnv:
             tosave.save(output_name)
         return imgs
 
+    from PIL import Image
+    import random
+
     def render(
         self, max_retries: int = 100) -> Dict[str, VisionSensorOutput]:
         outputs = {}
@@ -453,7 +457,62 @@ class MujocoSimEnv:
                         depth=False,
                         segmentation=True,
                         camera_id=cam_name,
-                    ) 
+                    )
+
+                    # this code I used to help track down the image segmentation
+                    # rgb_image = Image.fromarray(rgb.astype('uint8'), 'RGB')
+                    # rgb_image.save(f'rgb_image_{cam_name}.png')
+
+                    # # Process and save the Segmentation image
+                    # # Extracting the mjModel ID from the segmentation tuple (assuming it's the first element of the tuple)
+                    # mjmodel_ids = segmentation[:,:,0]
+
+                    # # To give each unique ID a unique color, map each unique ID to a color
+                    # unique_ids = np.unique(mjmodel_ids)
+                    # # Shuffle the unique IDs
+                    # random.shuffle(unique_ids)
+
+                    # # Assign random colors to each unique ID
+                    # colors = [tuple(random.randint(0, 255) for _ in range(3)) for _ in range(len(unique_ids))]
+                    # id_to_color = {id_: colors[i] for i, id_ in enumerate(unique_ids)}
+                    # with open(f'segmentation_colors_{cam_name}.txt', 'w') as f:
+                    #     for id, color in id_to_color.items():
+                    #         try:
+                    #             name = self.physics.model.body(id).name
+                    #             f.write(f'{name}: {color}\n')
+                    #         except:
+                    #             f.write(f'NONAME {id}: {color}\n')
+
+                    # # Create an image array
+                    # segmentation_colored = np.zeros((*mjmodel_ids.shape, 3), dtype=np.uint8)
+                    # for id_, color in id_to_color.items():
+                    #     segmentation_colored[mjmodel_ids == id_] = color
+
+                    # # Convert to an image and save
+                    # segmentation_image = Image.fromarray(segmentation_colored, 'RGB')
+                    # segmentation_image.save(f'segmentation_image_{cam_name}.png')
+
+                    segmentation_points = defaultdict(lambda: np.zeros(self.image_hw, dtype=bool))
+                    # {obj: np.zeros(self.image_hw, dtype=bool) for obj in self.task_objects}
+                    for i in range(segmentation.shape[0]):
+                        for j in range(segmentation.shape[1]):
+                            model_id = segmentation[i,j][0] # this is the id and type number
+                            # types can be found at https://mujoco.readthedocs.io/en/stable/APIreference/APItypes.html at mjtObj
+                            # then you can do env.model.[function corresponding to type](id) and get all the info, including the body id which is what we want
+                            try:
+                                geom_body_assc = self.physics.model.geom(model_id).bodyid
+                                if geom_body_assc == []:
+                                    continue
+                                model_name_candidates = [self.physics.model.body(asscid).name for asscid in geom_body_assc]
+                                model_name = [obj for obj in model_name_candidates if obj in self.task_objects][0]
+                                segmentation_points[model_name][i,j] = True
+                            except:
+                                continue
+                            # if model_name in self.task_objects:
+                            
+                    # print(f"object states: {self.get_object_states(self.get_contact())}")
+                    # print(f"segmentation: {segmentation.shape}")
+                    # print(segmentation)
                     
                     outputs[cam_name] = VisionSensorOutput(
                         rgb=rgb,
@@ -461,6 +520,7 @@ class MujocoSimEnv:
                         pos=(cam_pos[0], cam_pos[1], cam_pos[2]),
                         rot_mat=cam_rotmat,
                         fov=float(cam.fovy[0]),
+                        segmentation=segmentation_points
                     )
                     break   
 
