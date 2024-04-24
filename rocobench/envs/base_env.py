@@ -586,84 +586,84 @@ class MujocoSimEnv:
                     time.sleep(5)
         return outputs
 
-    def get_point_aligned_features(self):
-        object_sensor_outputs = self.render_feature_cameras()
+    # def get_point_aligned_features(self):
+    #     object_sensor_outputs = self.render_feature_cameras()
 
-        # combine object level point clouds into global scene point cloud
-        point_clouds = [
-            sensor_output[0].point_cloud.filter_bounds(bounds=SCENE_BOUNDS) 
-                for sensor_output in object_sensor_outputs.values()
-        ]
-        global_point_cloud = sum(point_clouds[1:], start=point_clouds[0])
+    #     # combine object level point clouds into global scene point cloud
+    #     point_clouds = [
+    #         sensor_output[0].point_cloud.filter_bounds(bounds=SCENE_BOUNDS) 
+    #             for sensor_output in object_sensor_outputs.values()
+    #     ]
+    #     global_point_cloud = sum(point_clouds[1:], start=point_clouds[0])
 
-        cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
+    #     cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
 
-        # calculate the global feature vector
-        _, scene_img = object_sensor_outputs["sceneshotcam"]
-        scene_img = cv2.resize(scene_img, (512, 512))
-        scene_tensor = torch.tensor(scene_img[:512,:512]).permute(2, 0, 1)
-        scene_tensor = scene_tensor.unsqueeze(0).float().to(self.device)
-        output = self.visual_encoder(scene_tensor)
-        global_feat = torch.tensor(output)
-        global_feat = global_feat.half().to(self.device)
-        global_feat = global_feat.mean(1)
-        global_feat = torch.nn.functional.normalize(global_feat, dim=-1)
-        FEAT_DIM = global_feat.shape[-1]
+    #     # calculate the global feature vector
+    #     _, scene_img = object_sensor_outputs["sceneshotcam"]
+    #     scene_img = cv2.resize(scene_img, (512, 512))
+    #     scene_tensor = torch.tensor(scene_img[:512,:512]).permute(2, 0, 1)
+    #     scene_tensor = scene_tensor.unsqueeze(0).float().to(self.device)
+    #     output = self.visual_encoder(scene_tensor)
+    #     global_feat = torch.tensor(output)
+    #     global_feat = global_feat.half().to(self.device)
+    #     global_feat = global_feat.mean(1)
+    #     global_feat = torch.nn.functional.normalize(global_feat, dim=-1)
+    #     FEAT_DIM = global_feat.shape[-1]
 
-        pixelwise_features = torch.zeros(global_point_cloud.xyz_pts.shape[0], FEAT_DIM, dtype=torch.half)
+    #     pixelwise_features = torch.zeros(global_point_cloud.xyz_pts.shape[0], FEAT_DIM, dtype=torch.half)
 
-        specific_views = list(set(self.point_feature_cameras) - {"sceneshotcam"})
+    #     specific_views = list(set(self.point_feature_cameras) - {"sceneshotcam"})
 
-        feat_per_obj = []
-        obj_sim_per_unit_area = []
-        for view in specific_views:
-            # crop the image to the bounding box and run it through the visual encoder to get the feature vector for the object
-            _, obj_img = object_sensor_outputs[view]
-            roi = torch.ones((512, 512, 3))
-            img_roi = torch.tensor(obj_img[:512,:512])
-            roi[:img_roi.shape[0], :img_roi.shape[1]] = img_roi
-            img_roi = roi.permute(2, 0, 1).unsqueeze(0).to(self.device)
-            roifeat = self.visual_encoder(img_roi)
-            roifeat = torch.tensor(roifeat)
-            roifeat = roifeat.half().cuda()
-            roifeat = roifeat.mean(1)
-            roifeat = torch.nn.functional.normalize(roifeat, dim=-1)
-            feat_per_obj.append(roifeat)
+    #     feat_per_obj = []
+    #     obj_sim_per_unit_area = []
+    #     for view in specific_views:
+    #         # crop the image to the bounding box and run it through the visual encoder to get the feature vector for the object
+    #         _, obj_img = object_sensor_outputs[view]
+    #         roi = torch.ones((512, 512, 3))
+    #         img_roi = torch.tensor(obj_img[:512,:512])
+    #         roi[:img_roi.shape[0], :img_roi.shape[1]] = img_roi
+    #         img_roi = roi.permute(2, 0, 1).unsqueeze(0).to(self.device)
+    #         roifeat = self.visual_encoder(img_roi)
+    #         roifeat = torch.tensor(roifeat)
+    #         roifeat = roifeat.half().cuda()
+    #         roifeat = roifeat.mean(1)
+    #         roifeat = torch.nn.functional.normalize(roifeat, dim=-1)
+    #         feat_per_obj.append(roifeat)
 
-            # calculate the cosine similarity between the global feature vector and the feature vector for the object and save that as well
-            _sim = cosine_similarity(global_feat, roifeat)
-            obj_sim_per_unit_area.append(_sim)
+    #         # calculate the cosine similarity between the global feature vector and the feature vector for the object and save that as well
+    #         _sim = cosine_similarity(global_feat, roifeat)
+    #         obj_sim_per_unit_area.append(_sim)
 
-        scores = torch.cat(obj_sim_per_unit_area).to(self.device)
-        feat_per_obj = torch.cat(feat_per_obj, dim=0).to(self.device)
+    #     scores = torch.cat(obj_sim_per_unit_area).to(self.device)
+    #     feat_per_obj = torch.cat(feat_per_obj, dim=0).to(self.device)
 
-        # get the cosine simixlarity between the features of each object. This will be a square matrix where the (i, j)th entry is the cosine similarity between the ith and jth objects
-        mask_sim_mat = torch.nn.functional.cosine_similarity(
-            feat_per_obj[:, :, None], feat_per_obj.t()[None, :, :]
-        )
-        mask_sim_mat.fill_diagonal_(0.0) # set the diagonal to 0 because we don't want to consider the similarity between the same object
-        mask_sim_mat = mask_sim_mat.mean(1)  # avg sim of each mask with each other mask
-        softmax_scores = scores.cuda() - mask_sim_mat # subtracting the object-object relevance (which can be thought of as the relevance of the object in context of the other objects) object-scene similarity (which is kind of like global relevance) gives how much more or less important that object is than all the other objects
-        softmax_scores = torch.nn.functional.softmax(softmax_scores, dim=0) # apply softmax to get the final scores
-        for objidx in range(len(specific_views)):
-            _weighted_feat = (
-                softmax_scores[objidx] * global_feat + (1 - softmax_scores[objidx]) * feat_per_obj[objidx]
-            )
-            _weighted_feat = torch.nn.functional.normalize(_weighted_feat, dim=-1)
-            pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] += _weighted_feat
-            pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] = torch.nn.functional.normalize(
-                pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :],
-                dim=-1,
-            ).half()
+    #     # get the cosine simixlarity between the features of each object. This will be a square matrix where the (i, j)th entry is the cosine similarity between the ith and jth objects
+    #     mask_sim_mat = torch.nn.functional.cosine_similarity(
+    #         feat_per_obj[:, :, None], feat_per_obj.t()[None, :, :]
+    #     )
+    #     mask_sim_mat.fill_diagonal_(0.0) # set the diagonal to 0 because we don't want to consider the similarity between the same object
+    #     mask_sim_mat = mask_sim_mat.mean(1)  # avg sim of each mask with each other mask
+    #     softmax_scores = scores.cuda() - mask_sim_mat # subtracting the object-object relevance (which can be thought of as the relevance of the object in context of the other objects) object-scene similarity (which is kind of like global relevance) gives how much more or less important that object is than all the other objects
+    #     softmax_scores = torch.nn.functional.softmax(softmax_scores, dim=0) # apply softmax to get the final scores
+    #     for objidx in range(len(specific_views)):
+    #         _weighted_feat = (
+    #             softmax_scores[objidx] * global_feat + (1 - softmax_scores[objidx]) * feat_per_obj[objidx]
+    #         )
+    #         _weighted_feat = torch.nn.functional.normalize(_weighted_feat, dim=-1)
+    #         pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] += _weighted_feat
+    #         pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :] = torch.nn.functional.normalize(
+    #             pixelwise_features[global_point_cloud.segmentation_pts[specific_views[objidx]], :],
+    #             dim=-1,
+    #         ).half()
 
-        outfeat = pixelwise_features.unsqueeze(0).float()  # interpolate is not implemented for float yet in pytorch
-        outfeat = outfeat.permute(0, 3, 1, 2)  # 1, H, W, feat_dim -> 1, feat_dim, H, W
-        outfeat = torch.nn.functional.interpolate(outfeat, [512, 512], mode="nearest")
-        outfeat = outfeat.permute(0, 2, 3, 1)  # 1, feat_dim, H, W --> 1, H, W, feat_dim
-        outfeat = torch.nn.functional.normalize(outfeat, dim=-1)
-        outfeat = outfeat[0].half()
+    #     outfeat = pixelwise_features.unsqueeze(0).float()  # interpolate is not implemented for float yet in pytorch
+    #     outfeat = outfeat.permute(0, 3, 1, 2)  # 1, H, W, feat_dim -> 1, feat_dim, H, W
+    #     outfeat = torch.nn.functional.interpolate(outfeat, [512, 512], mode="nearest")
+    #     outfeat = outfeat.permute(0, 2, 3, 1)  # 1, feat_dim, H, W --> 1, H, W, feat_dim
+    #     outfeat = torch.nn.functional.normalize(outfeat, dim=-1)
+    #     outfeat = outfeat[0].half()
 
-        return global_point_cloud.xyz_pts, outfeat
+    #     return global_point_cloud.xyz_pts, outfeat
 
     def get_contact(self) -> Dict:
         """ iterates through all contacts and return dict(each_root_body: set(other_body_names))""" 
