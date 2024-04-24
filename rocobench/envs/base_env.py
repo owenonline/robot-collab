@@ -1,8 +1,7 @@
+print("basic imports")
 import os
 import copy
 import time
-import torch
-from lavis.models.eva_vit import create_eva_vit_g
 import cv2 
 import numpy as np 
 import random
@@ -19,9 +18,12 @@ from mujoco import FatalError as mujocoFatalError
 import dm_control 
 from dm_control import mujoco as dm_mujoco
 from dm_control.utils.transformations import mat_to_quat, quat_to_euler
+print('local modules')
 from .env_utils import AllowArbitraryTypes, VisionSensorOutput, PointCloud
 from .constants import UR5E_ROBOTIQ_CONSTANTS, UR5E_SUCTION_CONSTANTS, PANDA_CONSTANTS, SCENE_BOUNDS
-
+# print("lavis")
+# import torch
+# from lavis.models.eva_vit import create_eva_vit_g
 
 @dataclasses.dataclass(frozen=False)
 class MjSite:
@@ -215,12 +217,12 @@ class MujocoSimEnv:
         skip_reset=False,
         ):
         # # prepare the image embedding model
+        print("in init loading visual encoder")
         # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # self.visual_encoder = create_eva_vit_g(512, precision='fp32').to(self.device)
 
-        self.tracked = tracked
-
         # load the task scene xml path
+        print("loading physics")
         self.xml_file_path = filepath
         self.physics = dm_mujoco.Physics.from_xml_path(filepath)
         self.home_qpos = home_qpos 
@@ -250,10 +252,12 @@ class MujocoSimEnv:
         self.error_freq = error_freq
 
         # check rendering options
+        print("rendering cameras")
         self.render_point_cloud = render_point_cloud
         self.render_buffers = dict()
         self.feature_render_buffers = dict()
         for cam in render_cameras:
+            print(cam)
             try:
                 self.physics.render(camera_id=cam, height=image_hw[0], width=image_hw[1])
             except Exception as e:
@@ -261,6 +265,7 @@ class MujocoSimEnv:
                 print("Camera {} does not exist in the xml file".format(cam))
             self.render_buffers[cam] = deque(maxlen=3000)
         for cam in point_feature_cameras:
+            print(cam)
             try:
                 self.physics.render(camera_id=cam, height=image_hw[0], width=image_hw[1])
             except Exception as e:
@@ -274,6 +279,7 @@ class MujocoSimEnv:
 
         self.random_state = np.random.RandomState(np_seed)
         self.randomize_init = randomize_init
+        print("resetting")
         if not skip_reset:
             # reset to home pos and record pos values
             if home_keyframe_id is not None:
@@ -531,7 +537,7 @@ class MujocoSimEnv:
                     )
 
                     # get the image from the camera
-                    rgb_image = Image.fromarray(rgb.astype('uint8'), "RGB")
+                    rgb_image = rgb.astype('uint8')#Image.fromarray(rgb.astype('uint8'), "RGB")
                     rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_90_CLOCKWISE)
 
                     # undistort the image, since the scene camera uses an extra wide field of view to capture everything in the scene
