@@ -480,10 +480,23 @@ def convert_weights_to_fp16(model: nn.Module):
 
 
 def create_eva_vit_g(img_size=224, drop_path_rate=0.4, use_checkpoint=False, precision="fp16"):
+    # model = VisionTransformer(
+    #     img_size=img_size,
+    #     patch_size=14,
+    #     use_mean_pooling=False,
+    #     embed_dim=1408,
+    #     depth=39,
+    #     num_heads=1408 // 88,
+    #     mlp_ratio=4.3637,
+    #     qkv_bias=True,
+    #     drop_path_rate=drop_path_rate,
+    #     norm_layer=partial(nn.LayerNorm, eps=1e-6),
+    #     use_checkpoint=use_checkpoint,
+    # )
     model = VisionTransformer(
         img_size=img_size,
         patch_size=14,
-        use_mean_pooling=False,
+        use_mean_pooling=True,
         embed_dim=1408,
         depth=39,
         num_heads=1408 // 88,
