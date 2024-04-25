@@ -19,6 +19,7 @@
     <geom name="floor" pos="0 0 -0.5" size="0 0 0.05" type="plane" material="groundplane"/>
     <!-- adding a table box -->
     <body name="table" pos="0 0.5 0">
+      <camera mode="trackcom" name='table' pos="0.500 0.000 1.000" xyaxes="0.894 -0.000 -0.447 0.000 1.000 -0.000"/>
       <geom name="table_collision" pos="0 0 0.1" size="1.6 0.4 0.05" type="box" group="0" friction="1 0.005 0.0001" rgba='1 1 1 1'/>
       <body name="table_top" pos="0 0 0.1">
         <geom name="table_top" size="1.6 0.4 0.05" type="box" conaffinity="0" contype="0" rgba='1 1 1 1' />

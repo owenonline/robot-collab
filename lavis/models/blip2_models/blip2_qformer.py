@@ -86,6 +86,47 @@ class Blip2Qformer(Blip2Base):
 
         self.max_txt_len = max_txt_len
 
+    def t2i(self, text, point_embeds):
+        image_embeds = self.ln_vision(point_embeds)
+        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(point_embeds.device)
+
+        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+
+        query_output = self.Qformer.bert(
+            query_embeds=query_tokens,
+            encoder_hidden_states=image_embeds,
+            encoder_attention_mask=image_atts,
+            use_cache=True,
+            return_dict=True,
+        )
+
+        image_feats = F.normalize(self.vision_proj(query_output.last_hidden_state), dim=-1)
+
+        text_tokens = self.tokenizer(
+            text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_txt_len,
+            return_tensors="pt",
+        ).to(point_embeds.device)
+        text_output = self.Qformer.bert(
+            text_tokens.input_ids,
+            attention_mask=text_tokens.attention_mask,
+            return_dict=True,
+        )
+        text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:, 0, :]), dim=-1)
+
+        image_feats_all = concat_all_gather(image_feats)  # [batch_size*num_gpu, num_query_tokens, embed_dim]
+        text_feat_all = concat_all_gather(text_feat)  # [batch_size*num_gpu, embed_dim]
+
+        sim_t2q = torch.matmul(text_feat.unsqueeze(1).unsqueeze(1), image_feats_all.permute(0, 2, 1)).squeeze()
+
+        # text-image similarity: aggregate across all query tokens
+        sim_t2i, _ = sim_t2q.max(-1)
+        sim_t2i = sim_t2i / self.temp  # [batch_size, batch_size*num_gpu]
+
+        return sim_t2i
+
     def forward(self, samples):
         image = samples["image"]
         text = samples["text_input"]

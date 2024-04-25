@@ -32,7 +32,7 @@ class Blip2T5(Blip2Base):
 
     def __init__(
         self,
-        vit_model,
+        vit_model="eva_clip_g",
         img_size=224,
         drop_path_rate=0,
         use_grad_checkpoint=False,
@@ -51,19 +51,14 @@ class Blip2T5(Blip2Base):
 
         self.tokenizer = self.init_tokenizer()
 
-        # print(f"image size: {img_size}")
-        # print(f"drop path rate: {drop_path_rate}")
-        # print(f"use grad checkpoint: {use_grad_checkpoint}")
-        # print(f"vit precision: {vit_precision}")
-        # print(f"t5_model: {t5_model}")
-        # self.visual_encoder, self.ln_vision = self.init_vision_encoder(
-        #     vit_model, img_size, drop_path_rate, use_grad_checkpoint, vit_precision
-        # )
+        self.visual_encoder, self.ln_vision = self.init_vision_encoder(
+            vit_model, img_size, drop_path_rate, use_grad_checkpoint, vit_precision
+        )
 
-        # for name, param in self.visual_encoder.named_parameters():
-        #     param.requires_grad = False
-        # self.visual_encoder = self.visual_encoder.eval()
-        # self.visual_encoder.train = disabled_train
+        for name, param in self.visual_encoder.named_parameters():
+            param.requires_grad = False
+        self.visual_encoder = self.visual_encoder.eval()
+        self.visual_encoder.train = disabled_train
         
         self.Qformer, self.query_tokens = self.init_Qformer(num_query_token, 1408)
         self.Qformer.cls = None
@@ -72,8 +67,6 @@ class Blip2T5(Blip2Base):
         for layer in self.Qformer.bert.encoder.layer:
             layer.output = None
             layer.intermediate = None
-        self.query_tokens = self.query_tokens.to('cpu') # store on CPU while not in use
-        self.Qformer = self.Qformer.to('cpu') # store on CPU while not in use
 
         self.t5_tokenizer = T5TokenizerFast.from_pretrained(t5_model)
 
@@ -92,16 +85,14 @@ class Blip2T5(Blip2Base):
             param.requires_grad = False
             param.data = param.data
 
-        self.t5_model.get_output_embeddings().requires_grad_(False) # changed to false
-        self.t5_model.get_input_embeddings().requires_grad_(False) # changes to false
+        self.t5_model.get_output_embeddings().requires_grad_(True)
+        self.t5_model.get_input_embeddings().requires_grad_(True)
 
-        self.t5_proj = nn.Linear(self.Qformer.config.hidden_size, self.t5_model.config.hidden_size).to('cpu') # store on CPU while not in use
-
-        self.t5_model = self.t5_model.to('cpu') # store on CPU while not in use
+        self.t5_proj = nn.Linear(self.Qformer.config.hidden_size, self.t5_model.config.hidden_size)
 
         pos_model = PositionalEncoding1D(1408 // 3)
         x = torch.zeros(1, 256, 1408 // 3)
-        self.pos_embedding = pos_model(x).squeeze().to('cpu') # store on CPU while not in use #.cuda()
+        self.pos_embedding = pos_model(x).squeeze().cuda()
 
         self.max_txt_len = max_txt_len
         self.prompt = ""
@@ -270,7 +261,6 @@ class Blip2T5(Blip2Base):
 
         return output_text
 
-    @torch.no_grad()
     def predict_answers(
         self,
         samples,
@@ -285,51 +275,37 @@ class Blip2T5(Blip2Base):
         repetition_penalty=1.0,
         **kwargs,
     ):
-        # with torch.cuda.amp.autocast(enabled=(self.device != torch.device("cpu")), dtype=torch.float32):
-        pc_embeds = samples["pc_feat"]
+        with torch.cuda.amp.autocast(enabled=(self.device != torch.device("cpu")), dtype=torch.float32):
+            pc_embeds = samples["pc_feat"]
 
-        # with torch.cuda.amp.autocast(dtype=torch.float32):
-        pc = samples["pc"].long()
-        all_pcs = torch.zeros((pc_embeds.shape), device='cpu')
-        for j in range(pc.shape[0]):
-            pcs = []
-            for i in range(3):
-                pc_i = pc[j][:, i]
-                pcs.append(self.pos_embedding[pc_i].cpu())
-            pcs = torch.cat(pcs, -1).to('cpu')
-            all_pcs[j][:, :1407] = pcs
-        # all_pcs = all_pcs.cuda()
+        with torch.cuda.amp.autocast(dtype=torch.float32):
+            pc = samples["pc"].long()
+            all_pcs = torch.zeros((pc_embeds.shape))
+            for j in range(pc.shape[0]):
+                pcs = []
+                for i in range(3):
+                    pc_i = pc[j][:, i]
+                    pcs.append(self.pos_embedding[pc_i])
+                pcs = torch.cat(pcs, -1)
+                all_pcs[j][:, :1407] = pcs
 
         pc_embeds = pc_embeds + 0.01 * all_pcs
         image_atts = torch.ones(pc_embeds.size()[:-1], dtype=torch.long).to(pc_embeds.device)
-        query_tokens = self.query_tokens.expand(pc_embeds.shape[0], -1, -1)
 
-        # use GPU for this part
-        query_tokens = query_tokens.to('cuda')
-        pc_embeds = pc_embeds.to('cuda')
-        image_atts = image_atts.to('cuda')
-        self.Qformer = self.Qformer.to('cuda')
+        query_tokens = self.query_tokens.expand(pc_embeds.shape[0], -1, -1)
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=pc_embeds,
             encoder_attention_mask=image_atts,
             return_dict=True,
         )
-        query_tokens = query_tokens.to('cpu')
-        pc_embeds = pc_embeds.to('cpu')
-        image_atts = image_atts.to('cpu')
-        self.Qformer = self.Qformer.to('cpu')
 
-        # use GPU for this part
-        self.t5_proj = self.t5_proj.to('cuda')
         inputs_t5 = self.t5_proj(query_output.last_hidden_state)
-        self.t5_proj = self.t5_proj.to('cpu')
+        atts_t5 = torch.ones(inputs_t5.size()[:-1], dtype=torch.long).to(pc_embeds.device)
 
-        atts_t5 = torch.ones(inputs_t5.size()[:-1], dtype=torch.long, device='cuda')
         if isinstance(samples["text_input"], str):
             samples["text_input"] = [samples["text_input"]]
 
-        # use GPU for this part
         prompt = self.prompt
 
         if prompt:
@@ -337,16 +313,14 @@ class Blip2T5(Blip2Base):
         else:
             text_input = samples["text_input"]
 
-        input_tokens = self.t5_tokenizer(text_input, padding="longest", return_tensors="pt")
+        input_tokens = self.t5_tokenizer(text_input, padding="longest", return_tensors="pt").to(pc_embeds.device)
 
-        encoder_atts = torch.cat([atts_t5, input_tokens.attention_mask], dim=1).to('cuda')
-        atts_t5 = atts_t5.to('cpu') # no longer needed
+        encoder_atts = torch.cat([atts_t5, input_tokens.attention_mask], dim=1)
         num_beams = 1
-        # device_type = "cuda" if "cuda" in str(self.device) else "cpu"
-        self.t5_model = self.t5_model.to('cuda')
-        with torch.cuda.amp.autocast(dtype=torch.float32):#enabled=(self.device != torch.device("cpu")), 
+        device_type = "cuda" if "cuda" in str(self.device) else "cpu"
+        with torch.cuda.amp.autocast(enabled=(self.device != torch.device("cpu")), dtype=torch.float32):
             inputs_embeds = self.t5_model.encoder.embed_tokens(input_tokens.input_ids)
-            inputs_embeds = torch.cat([inputs_t5, inputs_embeds], dim=1).to('cuda')
+            inputs_embeds = torch.cat([inputs_t5, inputs_embeds], dim=1)
 
             outputs = self.t5_model.generate(
                 inputs_embeds=inputs_embeds,
@@ -361,15 +335,12 @@ class Blip2T5(Blip2Base):
             )
             output_text = self.t5_tokenizer.batch_decode(outputs, skip_special_tokens=False)
 
-        # Back to CPU to save GPU memory
-        self.t5_model = self.t5_model.to('cpu')
-
-        # if self._apply_lemmatizer:
-        #     output_text_new = self._lemmatize(output_text)
-        #     output_text = output_text_new
-        #     # if output_text_new!=output_text:
-        #     #    print("old: %s, new: %s\n"%(output_text, output_text_new))
-        # # import pdb; pdb.set_trace()
+        if self._apply_lemmatizer:
+            output_text_new = self._lemmatize(output_text)
+            output_text = output_text_new
+            # if output_text_new!=output_text:
+            #    print("old: %s, new: %s\n"%(output_text, output_text_new))
+        # import pdb; pdb.set_trace()
         return output_text
 
     def _lemmatize(self, answers):
