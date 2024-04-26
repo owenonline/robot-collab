@@ -60,6 +60,16 @@
     <material name="light-wood" reflectance="0" texrepeat="15 15" texture="tex-light-wood" texuniform="true"/>
     <material name="wood" reflectance="0" texrepeat="4 4" texture="tex-light-wood" texuniform="true" />
 
+    <!-- table -->
+    <texture file="objects/textures/marble-texture.png" type="2d" name="tex-marble"/>
+    <material name="light-marble" reflectance="0" texrepeat="15 15" texture="tex-marble" texuniform="true"/>
+    <material name="marble" reflectance="0" texrepeat="4 4" texture="tex-marble" texuniform="true" />
+
+    <!-- ground -->
+    <texture file="objects/textures/grass-texture.png" type="2d" name="tex-grass"/>
+    <material name="light-grass" reflectance="0" texrepeat="15 15" texture="tex-grass" texuniform="true"/>
+    <material name="grass" reflectance="0" texrepeat="4 4" texture="tex-grass" texuniform="true" />
+
     <!-- bread -->
     <texture file="objects/textures/bread.png" type="2d" name="tex-bread" />
     <texture file="objects/textures/bread_slice.png" type="2d" name="tex-bread-slice" gridsize="1 1" />
