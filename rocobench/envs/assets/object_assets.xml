@@ -50,10 +50,11 @@
   <asset>
     <!-- CREDIT: taken from robosuite -->
     <!-- milk -->
+    <!-- <texture type="2d" name="tex-milk" file="objects/textures/milk-texture.png"/> -->
+    <!-- <texture type="cube" name="tex-milk" fileright="objects/textures/milk-texture.png" fileleft="objects/textures/milk-texture.png" fileup="objects/textures/ceramic.png" filedown="objects/textures/ceramic.png" rgb1="0.262 0.631 0.855" builtin="none" />
+    <material name="milk-mat" reflectance="0" texture="tex-milk"/>
     <mesh file="objects/meshes/milk.msh" name="milk_mesh" scale="1.5 1.5 1.5"/>
-    <mesh file="objects/meshes/milk_contact0.stl" name="milk_contact0" scale="1.5 1.5 1.5"/>
-    <texture file="objects/textures/ceramic.png" name="tex-ceramic" type="2d"/>
-    <material name="ceramic" reflectance="0.5" texrepeat="1 1" texture="tex-ceramic" texuniform="true"/>
+    <mesh file="objects/meshes/milk_contact0.stl" name="milk_contact0" scale="1.5 1.5 1.5"/> -->
   
     <!-- pantry box -->
     <texture file="objects/textures/light-wood.png" type="2d" name="tex-light-wood"/>
